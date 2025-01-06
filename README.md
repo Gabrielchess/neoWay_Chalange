@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Esse repositório contém a solução para o desafio técnico da vaga de Analista de Qualidade de Dados III. O objetivo deste desafio foi apresentar minha experiência em qualidade de dados, criando uma solução para garantir a padronização e visibilidade dos dados, além de realizar uma análise de qualidade em uma base de dados.
+O objetivo deste desafio é criar uma solução para garantir a padronização e visibilidade dos dados visando a escalabilidade da demanda de análise da qualidade dos dados.
 
 O desafio foi dividido em duas partes:
 
@@ -14,17 +14,17 @@ O desafio foi dividido em duas partes:
 A solução proposta visa garantir a padronização e visibilidade da qualidade dos dados entre as diferentes plataformas de cloud utilizadas pelas empresas. A solução envolve a utilização das seguintes tecnologias e práticas:
 
 1. **Tecnologias Utilizadas:**
-   - **DBT (Data Build Tool)**: Para transformação de dados e automação de qualidade.
-   - **Metaplane**: Para monitoramento contínuo de qualidade dos dados.
-   - **Snowflake / Google BigQuery**: Como plataforma de armazenamento e integração de dados.
+   - **Dagster/Dagit**: Workflow orchestration.
+   - **Great Expectations (GE):** Data quality validation.
+   - **Azure Storage Blob**: Como plataforma de armazenamento e integração de dados.
 
 2. **Processos de Qualidade de Dados:**
    - Validação de dados através de testes automatizados com frameworks como **Great Expectations**.
    - Criação de pipelines para verificar preenchimento, padronização, consistência, unicidade e abrangência dos dados.
 
 3. **Engajamento com as Áreas Envolvidas:**
-   - Criação de dashboards utilizando **Power BI** ou **Tableau** para visibilidade em tempo real.
-   - Workshops periódicos com equipes de desenvolvimento e stakeholders para alinhamento sobre as métricas de qualidade.
+   - Criação de dashboards utilizando **Power BI** para visibilidade em tempo real.
+   - Reuniões periódicas com equipes de desenvolvimento e stakeholders para alinhamento sobre as métricas de qualidade.
 
 ## Parte 2: Análise e Visibilidade da Qualidade de Dados
 
