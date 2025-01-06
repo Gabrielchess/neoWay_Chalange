@@ -5,6 +5,7 @@ import great_expectations as ge
 import pandas as pd
 import numpy as np
 import warnings
+import openpyxl
 import json
 
 # Suprimir todos os warnings
@@ -13,20 +14,29 @@ warnings.filterwarnings("ignore")
 # Funcao para carregar os dados
 @op
 def load_data():
-    url = "https://raw.githubusercontent.com/Gabrielchess/neoWay_Chalange/main/indicadoresCovid.csv"
-    raw_data = pd.read_csv(url)
+    # url = "https://raw.githubusercontent.com/Gabrielchess/neoWay_Chalange/main/indicadoresCovid.csv"
+    # raw_data = pd.read_csv(url)
+    raw_data = pd.read_csv("indicadoresCovid.csv")
 
+    for column in ["dataNotificacao", "dataInicioSintomas", "dataPrimeiraDose", "dataSegundaDose"]:
+        raw_data[column+"Aux"] = (
+            raw_data[column]
+            .str.replace("-", "", regex=False)
+            .fillna(0)
+            .astype(int)
+        )
+    
+    print(raw_data)
     return raw_data
 
 @op(
     ins={"raw_data": In()},
     out={"validation_results": Out()}
 )
-@op(out={"validation_results": Out(is_required=True)})  # Explicitly define the output
+@op(out={"validation_results": Out(is_required=True)})
 def validate_data(raw_data: pd.DataFrame):
-    print("Starting validation...")  # Debug print
+    print("Starting validation...")
     
-    # Criando o contexto de dados do Great Expectations
     context = ge.get_context()
     data_source = context.data_sources.add_pandas("pandas")
     data_asset = data_source.add_dataframe_asset(name="pd dataframe asset")
@@ -34,12 +44,13 @@ def validate_data(raw_data: pd.DataFrame):
     batch_definition = data_asset.add_batch_definition_whole_dataframe("batch definition")
     batch = batch_definition.get_batch(batch_parameters={"dataframe": raw_data})
     
+    # Updated expectations based on criteria
     expectations = [
+
         # Dimensão 1: Preenchimento
         ge.expectations.ExpectColumnValuesToNotBeNull(
             column="source_id", meta={"dimensao": "Preenchimento"}
         ),
-
         ge.expectations.ExpectColumnValuesToNotBeNull(
             column="dataNotificacao", meta={"dimensao": "Preenchimento"}
         ),
@@ -47,91 +58,160 @@ def validate_data(raw_data: pd.DataFrame):
             column="dataInicioSintomas", meta={"dimensao": "Preenchimento"}
         ),
         ge.expectations.ExpectColumnValuesToNotBeNull(
+            column="dataPrimeiraDose", meta={"dimensao": "Preenchimento"}
+        ),
+        ge.expectations.ExpectColumnValuesToNotBeNull(
+            column="dataSegundaDose", meta={"dimensao": "Preenchimento"}
+        ),
+        ge.expectations.ExpectColumnValuesToNotBeNull(
             column="uf", meta={"dimensao": "Preenchimento"}
         ),
         ge.expectations.ExpectColumnValuesToNotBeNull(
             column="idade", meta={"dimensao": "Preenchimento"}
         ),
+
+        # source_id validation
+        ge.expectations.ExpectColumnValuesToBeUnique(
+            column="source_id", 
+            mostly=0.9,
+            meta={"dimensao": "Unicidade"}
+        ),
         
-        # Dimensão 2: Padronizacao
         ge.expectations.ExpectColumnValuesToMatchStrftimeFormat(
-            column="dataInicioSintomas", strftime_format="%Y-%m-%d", meta={"dimensao": "Padronizacao"}
+            column="dataNotificacao", 
+            strftime_format="%Y-%m-%d", 
+            meta={"dimensao": "Padronizacao"}
         ),
+        
         ge.expectations.ExpectColumnValuesToMatchStrftimeFormat(
-            column="dataNotificacao", strftime_format="%Y-%m-%d", meta={"dimensao": "Padronizacao"}
+            column="dataInicioSintomas", 
+            strftime_format="%Y-%m-%d", 
+            meta={"dimensao": "Padronizacao"}
         ),
+        
+        # Text format validations
+        # Não deve possuir números, caracteres especiais, acentuação e deve ser formatado em letras maiúsculas
+        ge.expectations.ExpectColumnValuesToMatchRegex(
+            column="sintomas", 
+            regex=r'^[A-Z\s]*$', 
+            meta={"dimensao": "Padronizacao"}
+        ),
+        
+        ge.expectations.ExpectColumnValuesToMatchRegex(
+            column="profissionalSaude", 
+            regex="^(SIM|NAO)$", 
+            meta={"dimensao": "Padronizacao"}
+        ),
+        
         ge.expectations.ExpectColumnValuesToBeInSet(
-            column="sexo", value_set=["Masculino", "Femenino", "Indefinido"], meta={"dimensao": "Padronizacao"}
+            column="racaCor", 
+            value_set=["AMARELA", "BRANCA", "IGNORADO", "INDIGENA", "PARDA", "PRETA"], 
+            meta={"dimensao": "Padronizacao"}
+        ),
+        
+        ge.expectations.ExpectColumnValuesToMatchRegex(
+            column="outrosSintomas", 
+            regex=r'^[A-Z\s]*$', 
+            meta={"dimensao": "Padronizacao"}
+        ),
+        
+        ge.expectations.ExpectColumnValuesToMatchRegex(
+            column="sexo", 
+            regex="^(MASCULINO|FEMININO|INDEFINIDO)$", 
+            meta={"dimensao": "Padronizacao"}
+        ),
+        
+        ge.expectations.ExpectColumnValuesToBeInSet(
+            column="uf", 
+            value_set= [
+                'AC', 'AP', 'AM', 'PA', 'RO', 'RR', 'TO',
+                'AL', 'BA', 'CE', 'MA', 'PB', 'PE', 'PI',
+                'RN', 'SE', 'DF', 'GO', 'MT', 'MS', 'ES',
+                'MG', 'RJ', 'SP', 'PR', 'RS', 'SC'],
+
+            meta={"dimensao": "Abragencia"}
+        ),
+
+        # Não deve possuir números, caracteres especiais, acentuação e deve ser formatado em letras maiúsculas        
+        ge.expectations.ExpectColumnValuesToMatchRegex(
+            column="municipio", 
+            regex=r'^[A-Z\s]*$', 
+            meta={"dimensao": "Padronizacao"}
+        ),
+        
+        # Vaccine dates validations
+        ge.expectations.ExpectColumnValuesToBeBetween(
+            column="dataPrimeiraDoseAux", 
+            min_value=20200323, 
+            max_value=20220722, 
+            meta={"dimensao": "Consistencia"}
         ),
         ge.expectations.ExpectColumnValuesToMatchStrftimeFormat(
-            column="dataPrimeiraDose", strftime_format="%Y-%m-%d", mostly=1.0, meta={"dimensao": "Padronizacao"}
+            column="dataPrimeiraDose", 
+            strftime_format="%Y-%m-%d", 
+            meta={"dimensao": "Padronizacao"}
+        ),
+        
+        ge.expectations.ExpectColumnValuesToBeBetween(
+            column="dataNotificacaoAux", 
+            min_value=20200104, 
+            max_value=20220722, 
+            meta={"dimensao": "Consistencia"}
+        ),
+        ge.expectations.ExpectColumnValuesToBeBetween(
+            column="dataSegundaDoseAux", 
+            min_value=20200819, 
+            max_value=20220722, 
+            meta={"dimensao": "Consistencia"}
+        ),
+        ge.expectations.ExpectColumnValuesToBeBetween(
+            column="dataInicioSintomasAux", 
+            min_value=20200104, 
+            max_value=20220722, 
+            meta={"dimensao": "Consistencia"}
         ),
         ge.expectations.ExpectColumnValuesToMatchStrftimeFormat(
-            column="dataSegundaDose", strftime_format="%Y-%m-%d", mostly=1.0, meta={"dimensao": "Padronizacao"}
+            column="dataSegundaDose", 
+            strftime_format="%Y-%m-%d", 
+            meta={"dimensao": "Padronizacao"}
         ),
+        
+        # Vaccine manufacturer validations
         ge.expectations.ExpectColumnValuesToBeInSet(
-            column="racaCor", value_set=["AMARELA", "BRANCA", "IGNORADO", "INDIGENA", "PARDA", "PRETA"], meta={"dimensao": "Padronizacao"}
+            column="codigoLaboratorioPrimeiraDose", 
+            value_set=["ASTRAZENECA/FIOCRUZ", "JANSSEN", "SINOVAC/BUTANTAN", "PFIZER"], 
+            meta={"dimensao": "Padronizacao"}
         ),
-        ge.expectations.ExpectColumnValuesToBeInSet(
-            column="sexo", value_set=["Masculino", "Feminino", "Indefinido"], meta={"dimensao": "Padronizacao"}
-        ),        
+        
         ge.expectations.ExpectColumnValuesToBeInSet(
             column="codigoLaboratorioSegundaDose", 
-            value_set= ["ASTRAZENECA/FIOCRUZ", "JANSSEN", "SINOVAC/BUTANTAN", "PFIZER"],
-            mostly=1.0, meta={"dimensao": "Padronizacao"}
+            value_set=["ASTRAZENECA/FIOCRUZ", "JANSSEN", "SINOVAC/BUTANTAN", "PFIZER"], 
+            meta={"dimensao": "Padronizacao"}
         ),
         
-        # Colunas com valores específicos em LETRAS MAIÚSCULAS
+        # Age validation
         ge.expectations.ExpectColumnValuesToMatchRegex(
-            column="profissionalSaude", regex="^(Sim|Nao)$", meta={"dimensao": "Padronizacao"}
-        ),
-        ge.expectations.ExpectColumnValuesToMatchRegex(
-            column="sintomas", regex=r'^[A-Z\s]*$', mostly=1.0, meta={"dimensao": "Padronizacao"}
-        ),
-        ge.expectations.ExpectColumnValuesToMatchRegex(
-            column="outrosSintomas", regex=r'^[A-Z\s]*$', mostly=1.0, meta={"dimensao": "Padronizacao"}
-        ),
-        ge.expectations.ExpectColumnValuesToMatchRegex(
-            column="municipio", regex=r'^[A-Z\s]*$', mostly=1.0, meta={"dimensao": "Padronizacao"}
-        ),
-        ge.expectations.ExpectColumnValuesToMatchRegex(
-            column="idade", regex=r'^\d+$', meta={"dimensao": "Padronizacao"}
-        ),
-        
-        # Dimensão 3: Consistencia
-        ge.expectations.ExpectColumnValuesToBeBetween(
-            column="dataNotificacao", min_value="2020-01-04", max_value="2022-07-22", meta={"dimensao": "Consistencia"}
-        ),
-        ge.expectations.ExpectColumnValuesToBeBetween(
-            column="dataInicioSintomas", min_value="2020-01-04", max_value="2022-07-22", meta={"dimensao": "Consistencia"}
-        ),
-        ge.expectations.ExpectColumnValuesToBeBetween(
-            column="dataPrimeiraDose", min_value="2020-03-23", max_value="2022-07-22", mostly=1.0, meta={"dimensao": "Consistencia"}
-        ),
-        ge.expectations.ExpectColumnValuesToBeBetween(
-            column="dataSegundaDose", min_value="2020-08-19", max_value="2022-07-22", mostly=1.0, meta={"dimensao": "Consistencia"}
-        ),
-        ge.expectations.ExpectColumnValuesToBeBetween(
-            column="idade", min_value=0, max_value=122, strict_max=True, meta={"dimensao": "Consistencia"}
+            column="idade", 
+            regex=r'^-?\d+(\.\d+)?$', 
+            meta={"dimensao": "Padronizacao"}
         ),
         # ge.expectations.ExpectColumnPairValuesAToBeGreaterThanB(
-        #     column_A="dataPrimeiraDose", column_B="dataSegundaDose", mostly=1.0, meta={"dimensao": "Consistencia"}
+        #     column_A="dataSegundaDoseAux",
+        #     column_B="dataPrimeiraDoseAux",
+        #     or_equal=False,
+        #     meta={"dimensao": "Consistencia"}
         # ),
-        
-        # Dimensão 4: Unicidade
-        ge.expectations.ExpectColumnValuesToBeUnique(
-            column="source_id", mostly=0.9, meta={"dimensao": "Unicidade"}
-        ),
-        
-        # Dimensão 5: Abrangencia
-        ge.expectations.ExpectColumnValuesToBeInSet(
-            column="uf", value_set=[
-                "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO",
-                "MA", "MT", "MS", "MG","PA", "PB", "PR", "PE", "PI",
-                "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"], meta={"dimensao": "Abrangencia"}
+
+        ge.expectations.ExpectColumnValuesToBeBetween(
+            column="idade", 
+            min_value=0, 
+            max_value=122, 
+            strict_max=True, 
+            meta={"dimensao": "Consistencia"}
         )
+        
     ]
-    
+        
     validation_results = []
     
     print(f"Processing {len(expectations)} expectations...")  # Debug print
@@ -165,8 +245,11 @@ def validate_data(raw_data: pd.DataFrame):
                 "element_count": int(element_count),
                 "failed_count": int(failed_events),
                 "failed_percentage": float(failed_percentage),
-                "details": str(result.exception_info) if not result.success else "No issues",
                 "unexpected_values": unexpected_values
+                # "exception_events": {
+                #     "exception_message": str(result.exception_info.message) if not result.success and result.exception_info else None,
+                #     "exception_traceback": str(result.exception_info.traceback) if not result.success and result.exception_info else None
+                # }
             }
             
             validation_results.append(validation_result)
@@ -178,6 +261,7 @@ def validate_data(raw_data: pd.DataFrame):
                 metadata={
                     "type": str(expectation_type),
                     "success": str(result.success),
+                    #"element_count": int(element_count),
                     "failed_count": str(failed_events)
                 }
             )
@@ -204,16 +288,83 @@ def validate_data(raw_data: pd.DataFrame):
     ins={"validation_results": In()},
     out={"file_path": Out()}
 )
+
 @op
 def generate_report(validation_results):
     try:
-        with open('validation_results.json', 'w') as f:
-            json.dump(validation_results, f, indent=4)
+        # Itera sobre cada resultado
+        for result in validation_results:
+            # Remove o campo 'unexpected_values', se existir
+            unexpected_values = result.pop('unexpected_values', None)
+            
+            # Convert any 'NaN' to None (which becomes null in JSON)
+            for result in validation_results:
+                if 'unexpected_values' in result:
+                    result['unexpected_values'] = [
+                        np.null if value == np.NaN else value 
+                        for value in result['unexpected_values']
+                        ]
+
+            # Adiciona o campo novamente ao dicionário
+            result['unexpected_values'] = [
+                None if value is np.NaN else value  # Substitui NaN por None
+                for value in (unexpected_values or [])  # Garante que seja uma lista válida
+            ]
+        
+        # Salva os resultados no arquivo JSON
+        with open('validation_results.json', 'w', encoding='utf-8') as f:
+            json.dump(validation_results, f, indent=4, ensure_ascii=False)
+        
         return 'validation_results.json'
     except Exception as e:
         print(f"Error generating report: {str(e)}")
         return None
+
+@op(
+    ins={
+        "raw_data": In(),
+        "validation_results": In()
+    },
+    out={"excel_path": Out()}
+)
+
+@op
+def generate_excel_report(raw_data: pd.DataFrame, validation_results: list):
+    # Criar uma cópia do DataFrame original
+    df_with_validations = raw_data.copy()
     
+    # Criar colunas de validação para cada coluna original
+    for result in validation_results:
+        column = result.get('column')
+        if column == 'unknown' or not column:
+            continue
+            
+        # Criar nome da coluna de validação
+        validation_column = f"{column}_validation"
+        
+        # Inicializar todas as linhas como 'VÁLIDO'
+        df_with_validations[validation_column] = 'VÁLIDO'
+        
+        # Se houver valores inesperados, marcar como 'INVÁLIDO'
+        if not result.get('success'):
+            unexpected_values = result.get('unexpected_values', [])
+            
+            # Converter valores inesperados para string para comparação segura
+            unexpected_values = [str(val) if val is not None else '' for val in unexpected_values]
+            
+            # Marcar valores inválidos
+            mask = df_with_validations[column].astype(str).isin(unexpected_values)
+            df_with_validations.loc[mask, validation_column] = 'INVÁLIDO'
+            
+            # Adicionar informação do tipo de validação que falhou
+            df_with_validations.loc[mask, f"{column}_failure_type"] = result.get('type')
+            
+    # Salvar para Excel
+    excel_path = 'raw_data_with_validations.xlsx'
+    df_with_validations.to_excel(excel_path, index=False)
+    
+    return excel_path
+
 @op(
     ins={"file_path": In()},
     out={"blob_url": Out()}
@@ -250,6 +401,13 @@ def finalize_pipeline(blob_url: str):
 def data_pipeline():
     raw_data = load_data()
     validation_results = validate_data(raw_data)
-    file_path = generate_report(validation_results)  # Get the file path from generate_report
-    blob_url = upload_to_azure(file_path)  # Pass the file path to upload_to_azure
-    finalize_pipeline(blob_url)
+    
+    # Gerar ambos os relatórios
+    file_path = generate_report(validation_results)
+    excel_path = generate_excel_report(raw_data, validation_results)
+    
+    # Upload dos arquivos
+    json_blob_url = upload_to_azure(file_path)
+    excel_blob_url = upload_to_azure(excel_path)  # Você pode querer criar uma nova operação específica para o Excel
+    
+    finalize_pipeline(json_blob_url)  # Modificar para incluir ambas URLs se necessário
