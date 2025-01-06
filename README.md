@@ -1,4 +1,4 @@
-# Desafio Técnico - Analista de Qualidade de Dados III
+# Desafio Técnico - Data Quality Management Strategy
 
 ## Objetivo
 
