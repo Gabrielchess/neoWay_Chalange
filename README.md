@@ -54,7 +54,7 @@ O relatório de qualidade de dados foi desenvolvido com base nos resultados das 
   
   ```bash
     pip install dagster dagit pandas numpy great_expectations azure-storage-blob openpyxl
-
+```
 
 ### Explicação dos Passos:
 
